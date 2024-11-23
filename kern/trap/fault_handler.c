@@ -151,8 +151,33 @@ void fault_handler(struct Trapframe *tf)
 			//TODO: [PROJECT'24.MS2 - #08] [2] FAULT HANDLER I - Check for invalid pointers
 			//(e.g. pointing to unmarked user heap page, kernel or wrong access rights),
 			//your code is here
-
 			/*============================================================================================*/
+
+			uint32* pageTable;
+			uint32 pageTableEntry;
+			get_page_table(faulted_env->env_page_directory,fault_va,&pageTable);
+			pageTableEntry = pageTable[PTX(fault_va)];
+
+			if (fault_va >= USER_HEAP_START && fault_va <= USER_HEAP_MAX)
+			{
+				struct FrameInfo* frameInfo = get_frame_info(faulted_env->env_page_directory, fault_va, &pageTable);
+
+				if (frameInfo == NULL)
+			    {
+					env_exit();
+				}
+			}
+			else if (fault_va >= KERNEL_HEAP_START && fault_va <= KERNEL_HEAP_MAX)
+			{
+				env_exit();
+			}
+
+			else if ((pageTableEntry & PERM_PRESENT) && (pageTableEntry & (~PERM_WRITEABLE)))
+			{
+				env_exit();
+			}
+
+
 		}
 
 		/*2022: Check if fault due to Access Rights */
@@ -227,9 +252,28 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 		//cprintf("PLACEMENT=========================WS Size = %d\n", wsSize );
 		//TODO: [PROJECT'24.MS2 - #09] [2] FAULT HANDLER I - Placement
 		// Write your code here, remove the panic and write your code
-		panic("page_fault_handler().PLACEMENT is not implemented yet...!!");
-
+		//panic("page_fault_handler().PLACEMENT is not implemented yet...!!");
 		//refer to the project presentation and documentation for details
+		struct FrameInfo *frame_info = NULL;
+		allocate_frame(&frame_info);
+		if(frame_info == NULL){
+			panic("Failed to allocate frame for faulted page!");
+		}
+		map_frame(faulted_env->env_page_directory, frame_info, fault_va, PERM_WRITEABLE | PERM_USER);
+		int read_File = pf_read_env_page(faulted_env,(void*)fault_va);
+		if( read_File == E_PAGE_NOT_EXIST_IN_PF ){
+			if(!((fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX) || (fault_va >= USTACKBOTTOM && fault_va < USTACKTOP))){
+			env_exit();
+		    }
+		}
+		struct  WorkingSetElement *wsElement = env_page_ws_list_create_element(faulted_env,fault_va);
+		LIST_INSERT_TAIL(&(faulted_env->page_WS_list), wsElement);
+		if (faulted_env->page_WS_max_size == LIST_SIZE(&(faulted_env->page_WS_list))){
+			faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
+		}else{
+			faulted_env->page_last_WS_element = NULL;
+		}
+
 	}
 	else
 	{

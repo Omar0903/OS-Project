@@ -867,12 +867,52 @@ void* create_user_kern_stack(uint32* ptr_user_page_directory)
 #if USE_KHEAP
 	//TODO: [PROJECT'24.MS2 - #07] [2] FAULT HANDLER I - create_user_kern_stack
 	// Write your code here, remove the panic and write your code
-	panic("create_user_kern_stack() is not implemented yet...!!");
-
+	//panic("create_user_kern_stack() is not implemented yet...!!");
 	//allocate space for the user kernel stack.
 	//remember to leave its bottom page as a GUARD PAGE (i.e. not mapped)
 	//return a pointer to the start of the allocated space (including the GUARD PAGE)
 	//On failure: panic
+    // Calculate the total memory required for the kernel stack, including the guard page
+    // Calculate the total memory required for the kernel stack, including the guard page
+    uint32 total_size = KERNEL_STACK_SIZE;
+
+    // Use kmalloc to allocate memory for the stack
+    void* kstack = kmalloc(total_size);
+
+    // Check if kmalloc succeeded
+    if (kstack == NULL) {
+        panic("kmalloc failed! Unable to allocate space for the user kernel stack.");
+    }
+
+    // Calculate the address of the guard page (first page of the allocated stack)
+    uint32 guard_page_va = (uint32)kstack;
+
+    // Allocate and map pages, including the guard page
+    uint32 num_stack_pages = total_size / PAGE_SIZE;
+    for (int i = 0; i < num_stack_pages; i++) {
+        uint32 virtual_address = guard_page_va + (i * PAGE_SIZE);
+
+        // Allocate a frame for each page
+        struct FrameInfo* frame;
+        int ret = allocate_frame(&frame);
+        if (!frame) {
+            panic("Failed to allocate frame for kernel stack.");
+        }
+
+        // Set the permissions
+        uint32 permissions = PERM_WRITEABLE | PERM_USER;
+        if (i == 0) {
+            // Guard page: remove the PRESENT bit
+            permissions &= ~PERM_PRESENT;
+        }
+
+        // Map the frame to the corresponding virtual address with the specified permissions
+        map_frame(ptr_user_page_directory, frame, virtual_address, permissions);
+    }
+
+    // Return the starting address of the kernel stack
+    return kstack;
+
 
 
 #else
