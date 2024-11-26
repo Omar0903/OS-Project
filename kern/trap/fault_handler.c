@@ -157,23 +157,35 @@ void fault_handler(struct Trapframe *tf)
 			uint32 pageTableEntry;
 			get_page_table(faulted_env->env_page_directory,fault_va,&pageTable);
 			pageTableEntry = pageTable[PTX(fault_va)];
+			cprintf("exit trap\n");
 
 			if (fault_va >= USER_HEAP_START && fault_va <= USER_HEAP_MAX)
 			{
-				struct FrameInfo* frameInfo = get_frame_info(faulted_env->env_page_directory, fault_va, &pageTable);
-
-				if (frameInfo == NULL)
-			    {
+//				struct FrameInfo* frameInfo = get_frame_info(faulted_env->env_page_directory, fault_va, &pageTable);
+//
+//				if (frameInfo == NULL)
+//			    {
+//					cprintf("exit null frame\n");
+//					env_exit();
+//				}
+				if (pageTableEntry & (~PERM_MARKED)) {
+					cprintf("exit marked\n");
 					env_exit();
 				}
 			}
 			else if (fault_va >= KERNEL_HEAP_START && fault_va <= KERNEL_HEAP_MAX)
 			{
+				cprintf("exit kheap\n");
+				env_exit();
+			}
+			else if (fault_va >= KERN_STACK_TOP && fault_va <= KERN_STACK_TOP+ KERNEL_STACK_SIZE ) {
+				cprintf("exit kstack\n");
 				env_exit();
 			}
 
 			else if ((pageTableEntry & PERM_PRESENT) && (pageTableEntry & (~PERM_WRITEABLE)))
 			{
+				cprintf("exit read\n");
 				env_exit();
 			}
 
@@ -259,7 +271,7 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 		if(frame_info == NULL){
 			panic("Failed to allocate frame for faulted page!");
 		}
-		map_frame(faulted_env->env_page_directory, frame_info, fault_va, PERM_WRITEABLE | PERM_USER);
+		map_frame(faulted_env->env_page_directory, frame_info, fault_va, PERM_WRITEABLE | PERM_USER | PERM_PRESENT);
 		int read_File = pf_read_env_page(faulted_env,(void*)fault_va);
 		if( read_File == E_PAGE_NOT_EXIST_IN_PF ){
 			if(!((fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX) || (fault_va >= USTACKBOTTOM && fault_va < USTACKTOP))){
@@ -268,7 +280,7 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 		}
 		struct  WorkingSetElement *wsElement = env_page_ws_list_create_element(faulted_env,fault_va);
 		LIST_INSERT_TAIL(&(faulted_env->page_WS_list), wsElement);
-		if (faulted_env->page_WS_max_size == LIST_SIZE(&(faulted_env->page_WS_list))){
+		if (faulted_env->page_WS_max_size <= LIST_SIZE(&(faulted_env->page_WS_list))){
 			faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
 		}else{
 			faulted_env->page_last_WS_element = NULL;
