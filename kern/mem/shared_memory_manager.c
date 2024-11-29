@@ -113,8 +113,9 @@ struct Share* create_share(int32 ownerID, char* shareName, uint32 size, uint8 is
 	}
 	shared_obj->ID = (uint32) shared_obj & 0x7fffffff;
 	shared_obj->ownerID= ownerID;
-	strncpy(shared_obj->name, shareName, sizeof(shared_obj->name) - 1);
-	shared_obj->name[sizeof(shared_obj->name) - 1] = '\0'; // Ensure null termination
+//	strncpy(shared_obj->name, shareName, sizeof(shared_obj->name) - 1);
+//	shared_obj->name[sizeof(shared_obj->name) - 1] = '\0'; // Ensure null termination
+	strncpy(shared_obj->name, shareName, sizeof(shared_obj->name));
 	shared_obj->size=size;
 	shared_obj->isWritable=isWritable;
 	shared_obj->references=1;
@@ -137,8 +138,11 @@ struct Share* get_share(int32 ownerID, char* name)
 	//panic("get_share is not implemented yet");
 	//Your Code is Here...
 	struct Share* share_obj;
+
 	LIST_FOREACH(share_obj,&AllShares.shares_list){
-		if(share_obj->ownerID==ownerID && share_obj->name==name){
+		int iscompared = strcmp(share_obj->name,name)==0 ;
+		if(share_obj->ownerID==ownerID && iscompared)
+		{
 			return share_obj;
 		}
 	}
@@ -174,7 +178,7 @@ int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWrit
 		return E_NO_SHARE;
 	}
 	acquire_spinlock(&AllShares.shareslock);
-	LIST_INSERT_TAIL(&(AllShares.shares_list),newShare);
+	LIST_INSERT_HEAD(&AllShares.shares_list,newShare);
 	release_spinlock(&AllShares.shareslock);
 
 //	uint32 count = 0;
@@ -199,7 +203,6 @@ int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWrit
 
 	return newShare->ID;
 
-
 }
 
 
@@ -210,10 +213,38 @@ int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 {
 	//TODO: [PROJECT'24.MS2 - #21] [4] SHARED MEMORY [KERNEL SIDE] - getSharedObject()
 	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("getSharedObject is not implemented yet");
+	//panic("getSharedObject is not implemented yet");
 	//Your Code is Here...
-
 	struct Env* myenv = get_cpu_proc(); //The calling environment
+	struct Share* shared_obj = NULL;
+	struct Share* found_obj = NULL ;
+	LIST_FOREACH(shared_obj,&AllShares.shares_list){
+		int iscompared = strcmp(shared_obj->name,shareName)==0 ;
+		if(shared_obj->ownerID==ownerID &&iscompared){
+			found_obj = shared_obj;
+			break;
+		}
+	}
+	if (found_obj == NULL){
+		return E_SHARED_MEM_NOT_EXISTS;
+	}
+	uint32 numofFrames = ROUNDUP(found_obj->size,PAGE_SIZE)/PAGE_SIZE;
+	uint32 va = (uint32) virtual_address;
+	for (uint32 i = 0; i < numofFrames; i++) {
+		struct FrameInfo* frame = found_obj->framesStorage[i];
+		int perm;
+		if(found_obj->isWritable){
+			perm = PERM_WRITEABLE | PERM_PRESENT | PERM_USER;
+		}else{
+			perm = PERM_PRESENT | PERM_USER;
+		}
+		map_frame(myenv->env_page_directory,frame,va,perm);
+		va+= PAGE_SIZE;
+
+	}
+	found_obj->references++;
+	return (found_obj->ID);
+
 }
 
 //==================================================================================//
