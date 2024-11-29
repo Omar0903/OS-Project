@@ -66,8 +66,25 @@ inline struct FrameInfo** create_frames_storage(int numOfFrames)
 {
 	//TODO: [PROJECT'24.MS2 - #16] [4] SHARED MEMORY - create_frames_storage()
 	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("create_frames_storage is not implemented yet");
+	//panic("create_frames_storage is not implemented yet");
 	//Your Code is Here...
+
+    // Allocate memory for the array of pointers to FrameInfo
+	uint32 va = (uint32)kmalloc(numOfFrames * sizeof(struct FrameInfo*));
+    struct FrameInfo** framesStorage = (struct FrameInfo**) va;
+    if (framesStorage == NULL) {
+        // Allocation failed
+        return NULL;
+    }
+
+    // Initialize the allocated memory to zero
+    for (uint32 i = 0; i < numOfFrames; ++i) {
+    	framesStorage[i] = NULL;
+	}
+
+    // Return the pointer to the allocated array
+    return framesStorage;
+
 
 }
 
@@ -81,8 +98,28 @@ struct Share* create_share(int32 ownerID, char* shareName, uint32 size, uint8 is
 {
 	//TODO: [PROJECT'24.MS2 - #16] [4] SHARED MEMORY - create_share()
 	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("create_share is not implemented yet");
+	//panic("create_share is not implemented yet");
 	//Your Code is Here...
+
+	struct Share *shared_obj = (struct Share*) kmalloc(sizeof(struct Share));
+	if (shared_obj == NULL) {
+		return NULL;
+	}
+	uint32 numFrames = ROUNDUP(size,PAGE_SIZE)/PAGE_SIZE;
+	shared_obj->framesStorage = create_frames_storage(numFrames);
+	if (shared_obj->framesStorage == NULL) {
+		kfree(shared_obj);
+		return NULL;
+	}
+	shared_obj->ID = (uint32) shared_obj & 0x7fffffff;
+	shared_obj->ownerID= ownerID;
+	strncpy(shared_obj->name, shareName, sizeof(shared_obj->name) - 1);
+	shared_obj->name[sizeof(shared_obj->name) - 1] = '\0'; // Ensure null termination
+	shared_obj->size=size;
+	shared_obj->isWritable=isWritable;
+	shared_obj->references=1;
+
+	return shared_obj;
 
 }
 
@@ -97,8 +134,15 @@ struct Share* get_share(int32 ownerID, char* name)
 {
 	//TODO: [PROJECT'24.MS2 - #17] [4] SHARED MEMORY - get_share()
 	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("get_share is not implemented yet");
+	//panic("get_share is not implemented yet");
 	//Your Code is Here...
+	struct Share* share_obj;
+	LIST_FOREACH(share_obj,&AllShares.shares_list){
+		if(share_obj->ownerID==ownerID && share_obj->name==name){
+			return share_obj;
+		}
+	}
+	return NULL;
 
 }
 
@@ -109,10 +153,53 @@ int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWrit
 {
 	//TODO: [PROJECT'24.MS2 - #19] [4] SHARED MEMORY [KERNEL SIDE] - createSharedObject()
 	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("createSharedObject is not implemented yet");
+	//panic("createSharedObject is not implemented yet");
 	//Your Code is Here...
-
 	struct Env* myenv = get_cpu_proc(); //The calling environment
+
+	struct Share *existShare;
+//	acquire_spinlock(&AllShares.shareslock);
+	LIST_FOREACH(existShare,&AllShares.shares_list){
+		if (existShare->ownerID == ownerID && strcmp(existShare->name,shareName)==0) {
+			return E_SHARED_MEM_EXISTS;
+		}
+	}
+//	release_spinlock(&AllShares.shareslock);
+//	if(getSizeOfSharedObject(ownerID, shareName)!= E_SHARED_MEM_NOT_EXISTS){
+//		return E_SHARED_MEM_EXISTS;
+//	}
+
+	struct Share *newShare = create_share(ownerID,shareName,size,isWritable);
+	if (newShare == NULL) {
+		return E_NO_SHARE;
+	}
+	acquire_spinlock(&AllShares.shareslock);
+	LIST_INSERT_TAIL(&(AllShares.shares_list),newShare);
+	release_spinlock(&AllShares.shareslock);
+
+//	uint32 count = 0;
+//	for (uint32 i = (uint32)virtual_address;  i <= ((uint32)virtual_address)+size ; i+= PAGE_SIZE) {
+//		struct FrameInfo* frame = NULL;
+//		allocate_frame(&frame);
+//		map_frame(myenv->env_page_directory,frame,i,PERM_USER|PERM_PRESENT|PERM_WRITEABLE);
+//		newShare->framesStorage[count]=frame;
+//		count++;
+//
+//	}
+	uint32 numofFrames = ROUNDUP(size,PAGE_SIZE)/PAGE_SIZE;
+	uint32 va = (uint32) virtual_address;
+	for (uint32 i  = 0;  i  < numofFrames; i++ ) {
+		struct FrameInfo* frame = NULL;
+		allocate_frame(&frame);
+		map_frame(myenv->env_page_directory,frame,va,PERM_USER|PERM_PRESENT|PERM_WRITEABLE);
+		newShare->framesStorage[i]=frame;
+		va+=PAGE_SIZE;
+
+	}
+
+	return newShare->ID;
+
+
 }
 
 

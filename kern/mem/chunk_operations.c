@@ -139,10 +139,21 @@ void* sys_sbrk(int numOfPages)
 	//TODO: [PROJECT'24.MS2 - #11] [3] USER HEAP - sys_sbrk
 	/*====================================*/
 	/*Remove this line before start coding*/
-	return (void*)-1 ;
+	//return (void*)-1 ;
 	/*====================================*/
+	//cprintf("sbrk from chunk operations\n");
 	struct Env* env = get_cpu_proc(); //the current running Environment to adjust its break limit
-
+	if(numOfPages==0){
+	return (void*) env->Break;
+	}
+	else if(env->Break+(numOfPages*1024)>env->Limit){
+	return (void*)-1 ;
+	}
+	else{
+	uint32* prevBreak=env->Break;
+	env->Break+=numOfPages*1024;
+	return (void*)prevBreak;
+	}
 
 }
 
@@ -159,7 +170,17 @@ void allocate_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 
 	//TODO: [PROJECT'24.MS2 - #13] [3] USER HEAP [KERNEL SIDE] - allocate_user_mem()
 	// Write your code here, remove the panic and write your code
-	panic("allocate_user_mem() is not implemented yet...!!");
+	//panic("allocate_user_mem() is not implemented yet...!!");
+	uint32* ptr_page_table = NULL;
+	for(uint32 i=virtual_address;i<=virtual_address+size;i+=PAGE_SIZE){
+		get_page_table(e->env_page_directory,i,&ptr_page_table);
+		if(ptr_page_table == NULL){
+			create_page_table(e->env_page_directory,i);
+			get_page_table(e->env_page_directory,i,&ptr_page_table);
+		}
+		ptr_page_table[PTX(i)]= ptr_page_table[PTX(i)] | PERM_MARKED;
+	}
+	return;
 }
 
 //=====================================
@@ -175,8 +196,34 @@ void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 
 	//TODO: [PROJECT'24.MS2 - #15] [3] USER HEAP [KERNEL SIDE] - free_user_mem
 	// Write your code here, remove the panic and write your code
-	panic("free_user_mem() is not implemented yet...!!");
+	//panic("free_user_mem() is not implemented yet...!!");
 
+
+	uint32 numOfPages = (ROUNDUP(size, PAGE_SIZE)) / PAGE_SIZE; // Calculate the range
+
+	uint32 alignedAddress = (uint32)ROUNDDOWN(virtual_address, PAGE_SIZE);
+
+//	cprintf("VA: 0x%x\n", virtual_address);
+//	cprintf("Size: %d\n", size);
+
+	// unmark from page table
+	uint32* ptr_page_table = NULL;
+	for(uint32 i=virtual_address;i<=virtual_address+size;i+=PAGE_SIZE)
+	{
+		get_page_table(e->env_page_directory,i,&ptr_page_table);
+		ptr_page_table[PTX(i)]= ptr_page_table[PTX(i)] & (~PERM_MARKED);
+	}
+
+	for (uint32 i = 0; i < numOfPages; i++)
+	{
+		// Remove the page from the page file
+		pf_remove_env_page(e, alignedAddress);
+
+		// Remove the page from the working set
+		env_page_ws_invalidate(e, alignedAddress);
+
+		alignedAddress += (PAGE_SIZE); // Move to the next page
+	}
 
 	//TODO: [PROJECT'24.MS2 - BONUS#3] [3] USER HEAP [KERNEL SIDE] - O(1) free_user_mem
 }

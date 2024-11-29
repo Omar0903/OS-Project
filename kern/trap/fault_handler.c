@@ -157,21 +157,26 @@ void fault_handler(struct Trapframe *tf)
 			uint32 pageTableEntry;
 			get_page_table(faulted_env->env_page_directory,fault_va,&pageTable);
 			pageTableEntry = pageTable[PTX(fault_va)];
-			cprintf("exit trap\n");
+			//cprintf("exit trap\n");
+
+			struct FrameInfo* frameInfo = get_frame_info(faulted_env->env_page_directory, fault_va, &pageTable);
+			if (frameInfo != NULL)
+		    {
+				cprintf("exit null frame\n");
+				env_exit();
+			}
 
 			if (fault_va >= USER_HEAP_START && fault_va <= USER_HEAP_MAX)
 			{
-//				struct FrameInfo* frameInfo = get_frame_info(faulted_env->env_page_directory, fault_va, &pageTable);
-//
-//				if (frameInfo == NULL)
-//			    {
-//					cprintf("exit null frame\n");
-//					env_exit();
-//				}
-				if (pageTableEntry & (~PERM_MARKED)) {
-					cprintf("exit marked\n");
-					env_exit();
+
+				if (fault_va>=(uint32)faulted_env->Limit + PAGE_SIZE) {
+					uint32 Markedbit = pageTableEntry & (PERM_MARKED);
+					if (!Markedbit) {
+						cprintf("exit marked\n");
+						env_exit();
+					}
 				}
+
 			}
 			else if (fault_va >= KERNEL_HEAP_START && fault_va <= KERNEL_HEAP_MAX)
 			{

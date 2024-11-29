@@ -245,7 +245,7 @@ void *alloc_block_FF(uint32 size)
 			//cprintf("after free block data \n");
 			LIST_FOREACH(block, &freeBlocksList){
 				//cprintf("THE BLOCK33333:%x\n",block);
-				cprintf("im here\n");
+				//cprintf("im here\n");
 				uint32 blockSize = get_block_size(block); /*size of the freeblock*/
 				if(blockSize >= size + metaData)     /* if the required size found */
 				{
