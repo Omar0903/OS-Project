@@ -162,7 +162,7 @@ void fault_handler(struct Trapframe *tf)
 			struct FrameInfo* frameInfo = get_frame_info(faulted_env->env_page_directory, fault_va, &pageTable);
 			if (frameInfo != NULL)
 		    {
-				cprintf("exit null frame\n");
+//				cprintf("exit null frame\n");
 				env_exit();
 			}
 
@@ -172,7 +172,7 @@ void fault_handler(struct Trapframe *tf)
 				if (fault_va>=(uint32)faulted_env->Limit + PAGE_SIZE) {
 					uint32 Markedbit = pageTableEntry & (PERM_MARKED);
 					if (!Markedbit) {
-						cprintf("exit marked\n");
+//						cprintf("exit marked\n");
 						env_exit();
 					}
 				}
@@ -180,17 +180,17 @@ void fault_handler(struct Trapframe *tf)
 			}
 			else if (fault_va >= KERNEL_HEAP_START && fault_va <= KERNEL_HEAP_MAX)
 			{
-				cprintf("exit kheap\n");
+//				cprintf("exit kheap\n");
 				env_exit();
 			}
 			else if (fault_va >= KERN_STACK_TOP && fault_va <= KERN_STACK_TOP+ KERNEL_STACK_SIZE ) {
-				cprintf("exit kstack\n");
+//				cprintf("exit kstack\n");
 				env_exit();
 			}
 
 			else if ((pageTableEntry & PERM_PRESENT) && (pageTableEntry & (~PERM_WRITEABLE)))
 			{
-				cprintf("exit read\n");
+//				cprintf("exit read\n");
 				env_exit();
 			}
 

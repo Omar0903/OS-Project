@@ -170,11 +170,47 @@ void* sget(int32 ownerEnvID, char *sharedVarName)
 	//TODO: [PROJECT'24.MS2 - #20] [4] SHARED MEMORY [USER SIDE] - sget()
 	// Write your code here, remove the panic and write your code
 	//panic("sget() is not implemented yet...!!");
+
+
 	if(sys_getSizeOfSharedObject(ownerEnvID, sharedVarName)== E_SHARED_MEM_NOT_EXISTS){
 		return NULL;
 	}
+	uint32 size = ROUNDUP(sys_getSizeOfSharedObject(ownerEnvID, sharedVarName), PAGE_SIZE);
+	uint32 init_mark_add = 0;
+	uint32 count = 0;
+	uint32 freeSize = 0;
+	uint32 flag = 0;
+
+	for(uint32 curAddr = (uint32)myEnv->Limit + PAGE_SIZE; curAddr <= USER_HEAP_MAX - PAGE_SIZE; curAddr += PAGE_SIZE)
+	{
+		if(freeSize >= size)
+		{
+			marked_pages[(init_mark_add-USER_HEAP_START)/PAGE_SIZE]=freeSize/PAGE_SIZE;
+			flag = sys_getSharedObject(ownerEnvID,sharedVarName,(void*)init_mark_add);
+			break;
+		}
+		if(marked_pages[(curAddr-USER_HEAP_START)/PAGE_SIZE] > 0){
+
+			curAddr+=(marked_pages[(curAddr-USER_HEAP_START)/PAGE_SIZE]*PAGE_SIZE)-PAGE_SIZE;
+			count = 0;
+			freeSize = 0;
+			init_mark_add = 0;
+		}else{
+
+			if(!count) init_mark_add = curAddr;
+			freeSize+=PAGE_SIZE;
+			count++;
+		}
+
+	}
+	if( flag!= E_SHARED_MEM_NOT_EXISTS){
+
+
+		return (void*)init_mark_add;
+	}
 
 	return NULL;
+
 }
 
 
